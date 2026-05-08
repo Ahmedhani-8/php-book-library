@@ -1,17 +1,8 @@
 <?php
-// ============================================================================
-// PHP Book Library Manager - Assignment 2
-// A dynamic single-file PHP application for managing a personal book library
-// ============================================================================
 
 session_start();
-
-// ============================================================================
-// PART 1: DATA STRUCTURE & INITIALIZATION
-// ============================================================================
-
 // Multi-dimensional array of books with required keys
-$books = [
+$defaultBooks = [
     [
         'id' => 1,
         'title' => 'The Great Gatsby',
@@ -41,24 +32,22 @@ $books = [
     ]
 ];
 
-// Allowed genres for dropdown
+if (!isset($_SESSION['books'])) {
+    $_SESSION['books'] = $defaultBooks;
+}
+
+$books = $_SESSION['books'];
 $genres = ["Fiction", "Non-Fiction", "Science", "History", "Biography", "Technology"];
 
-// Initialize submitted data and errors
+// data and errors
 $submittedData = [];
 $errors = [];
 $editMode = false;
 $editId = null;
 
-// ============================================================================
-// PART 2: FORM HANDLING & VALIDATION LOGIC
-// ============================================================================
-
-// Check for edit mode from query parameter
 if (isset($_GET['edit_id'])) {
     $editId = (int)$_GET['edit_id'];
     $editMode = true;
-    // Pre-populate form with existing book data
     foreach ($books as $book) {
         if ($book['id'] == $editId) {
             $submittedData = $book;
@@ -67,20 +56,23 @@ if (isset($_GET['edit_id'])) {
     }
 }
 
-// Check for delete action
+if (isset($_POST['edit_id']) && $_POST['edit_id'] !== '') {
+    $editId = (int)$_POST['edit_id'];
+    $editMode = true;
+}
+
 if (isset($_POST['delete_id'])) {
     $deleteId = (int)$_POST['delete_id'];
     $books = array_values(array_filter($books, function($book) use ($deleteId) {
         return $book['id'] != $deleteId;
     }));
+    $_SESSION['books'] = $books;
     $_SESSION['success'] = "Book deleted successfully!";
     header("Location: index.php");
     exit;
 }
 
-// Detect form submission
 if ($_SERVER["REQUEST_METHOD"] === "POST" && !isset($_POST['delete_id'])) {
-    // Sanitize all inputs
     $title = trim(htmlspecialchars($_POST['title'] ?? ''));
     $author = trim(htmlspecialchars($_POST['author'] ?? ''));
     $genre = trim(htmlspecialchars($_POST['genre'] ?? ''));
@@ -88,7 +80,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && !isset($_POST['delete_id'])) {
     $pages = trim(htmlspecialchars($_POST['pages'] ?? ''));
     $image_url = trim(htmlspecialchars($_POST['image_url'] ?? ''));
 
-    // Store sanitized data for re-population
     $submittedData = [
         'title' => $title,
         'author' => $author,
@@ -98,45 +89,39 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && !isset($_POST['delete_id'])) {
         'image_url' => $image_url
     ];
 
-    // Validation logic
     $errors = [];
 
-    // Title validation: Required, 3-120 characters
     if (empty($title)) {
         $errors['title'] = "Title is required.";
     } elseif (strlen($title) < 3 || strlen($title) > 120) {
         $errors['title'] = "Title must be between 3 and 120 characters.";
     }
 
-    // Author validation: Required, must contain at least two words
     if (empty($author)) {
         $errors['author'] = "Author is required.";
     } elseif (count(explode(' ', trim($author))) < 2) {
         $errors['author'] = "Author must contain at least two words (first and last name).";
     }
 
-    // Genre validation: Required, must exist in genres array
     if (empty($genre)) {
         $errors['genre'] = "Genre is required.";
     } elseif (!in_array($genre, $genres)) {
         $errors['genre'] = "Please select a valid genre.";
     }
 
-    // Year validation: Required, 4-digit integer between 1000 and current year
     if (empty($year)) {
         $errors['year'] = "Year is required.";
     } elseif (!is_numeric($year) || strlen($year) != 4 || $year < 1000 || $year > date("Y")) {
         $errors['year'] = "Year must be a 4-digit number between 1000 and " . date("Y") . ".";
     }
 
-    // Pages validation: Required, positive integer greater than 0
     if (empty($pages)) {
         $errors['pages'] = "Pages is required.";
     } elseif (!is_numeric($pages) || $pages <= 0 || intval($pages) != $pages) {
         $errors['pages'] = "Pages must be a positive integer.";
     }
 
-    // Image URL validation (optional but if provided, must end with valid image extension)
+    // Image URL validation 
     if (!empty($image_url)) {
         $validExtensions = ['.jpg', '.jpeg', '.png', '.gif'];
         $hasValidExtension = false;
@@ -154,7 +139,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && !isset($_POST['delete_id'])) {
     // If no errors, add or update book
     if (empty($errors)) {
         if ($editMode && $editId) {
-            // Update existing book
             foreach ($books as &$book) {
                 if ($book['id'] == $editId) {
                     $book['title'] = $title;
@@ -166,6 +150,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && !isset($_POST['delete_id'])) {
                     break;
                 }
             }
+            unset($book);
+            $_SESSION['books'] = $books;
             $_SESSION['success'] = "Book updated successfully!";
         } else {
             // Add new book
@@ -186,10 +172,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && !isset($_POST['delete_id'])) {
                 'image_url' => $image_url
             ];
             $books[] = $newBook;
+            $_SESSION['books'] = $books;
             $_SESSION['success'] = "Book added successfully!";
         }
 
-        // Clear submitted data and redirect to prevent re-submission
+        
         $submittedData = [];
         $editMode = false;
         $editId = null;
@@ -264,9 +251,6 @@ if (isset($_GET['sort'])) {
     </style>
 </head>
 <body>
-    <!-- ================================================================
-    PART 3: HTML OUTPUT & BOOTSTRAP INTEGRATION
-    ================================================================ -->
 
     <div class="container container-main">
         <h1 class="mb-4">Personal Book Library</h1>
@@ -283,7 +267,7 @@ if (isset($_GET['sort'])) {
         <?php endif; ?>
 
         <div class="row">
-            <!-- Left Column: Form -->
+            <!-- Form -->
             <div class="col-lg-4 mb-4">
                 <div class="form-section">
                     <h3 class="mb-4"><?php echo $editMode ? 'Edit Book' : 'Add New Book'; ?></h3>
@@ -296,6 +280,9 @@ if (isset($_GET['sort'])) {
                     <?php endif; ?>
 
                     <form method="POST" action="index.php">
+                        <?php if ($editMode && $editId): ?>
+                            <input type="hidden" name="edit_id" value="<?php echo htmlspecialchars($editId); ?>">
+                        <?php endif; ?>
                         <!-- Title Field -->
                         <div class="mb-3">
                             <label for="title" class="form-label">Title</label>
@@ -394,7 +381,7 @@ if (isset($_GET['sort'])) {
                 </div>
             </div>
 
-            <!-- Right Column: Books Table -->
+            <!-- Books Table -->
             <div class="col-lg-8">
                 <div class="mb-3">
                     <form method="GET" action="index.php" class="input-group">
@@ -478,9 +465,7 @@ if (isset($_GET['sort'])) {
         </div>
     </div>
 
-    <!-- ================================================================
-    PART 5: BOOTSTRAP MODAL CONFIRMATION (Required Feature)
-    ================================================================ -->
+
 
     <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
         <div class="modal-dialog">
